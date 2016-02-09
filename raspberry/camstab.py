@@ -1,27 +1,87 @@
 # import the necessary packages
 from __future__ import print_function
+from __future__ import division
 from imutils.video import WebcamVideoStream
 from imutils.video import FPS
+import math
 import argparse
 import imutils
 import cv2
 import time
-from RPIO import PWM
+import RPi.GPIO as GPIO
+import wiringpi2 as wiringpi
+import time
 
-PWM = 200
+PWM_PIN_1 = 16
+PWM_PIN_2 = 21
 
-def transmitMoveOrder(x, y):
-	print("send pwm")
-	# servo = PWM.Servo()
+# GPIO.setwarnings(False)
+# GPIO.setmode(GPIO.BCM)
+# GPIO.setup(PWM_PIN_1, GPIO.OUT)
+# GPIO.setup(PWM_PIN_2, GPIO.OUT)
 
-	# Set servo on GPIO17 to 1200us (1.2ms)
-	# servo.set_servo(17, 1200)
+# pwm1 = GPIO.PWM(PWM_PIN_1, 320)
+# pwm2 = GPIO.PWM(PWM_PIN_2, 320)
+# pwm1.start(1)
+# pwm2.start(1)
+ 
+# use BCM GPIO numbers                                                        
+wiringpi.wiringPiSetupGpio()
 
-	# Set servo on GPIO17 to 2000us (2.0ms)
-	# servo.set_servo(17, 2000)
+pwm_pin_horizontal = 18
+pwm_pin_vertical = 13
 
-	# Clear servo on GPIO17
-	# servo.stop_servo(17)
+pwm_clock_1 = 400
+pwm_clock_2 = 400
+
+pwm_range = 1024
+
+dt_min = 50
+dt_max = 95
+
+dt_horizontal = dt_min
+dt_vertical = dt_min
+
+# enable PWM0                                                                 
+wiringpi.pinMode(pwm_pin_horizontal, 2)
+wiringpi.pwmSetMode(0)
+wiringpi.pwmSetClock(pwm_clock_1)
+wiringpi.pwmSetRange(pwm_range)
+
+# enable PWM1                                                                 
+wiringpi.pinMode(pwm_pin_vertical, 2)
+wiringpi.pwmSetMode(0)
+wiringpi.pwmSetClock(pwm_clock_2)
+wiringpi.pwmSetRange(pwm_range)
+
+time_start = time.time()
+cycle = 5		
+
+wiringpi.pwmWrite(pwm_pin_horizontal, 72)
+wiringpi.pwmWrite(pwm_pin_vertical, 72)
+
+time.sleep(1)
+
+def transmitMoveOrder(horizontal, vertical):
+	if horizontal != 0:
+		global dt_horizontal
+		dt_horizontal += horizontal
+		if dt_horizontal > dt_max:
+			dt_horizontal = dt_max
+		if dt_horizontal < dt_min:
+			dt_horizontal = dt_min
+
+		wiringpi.pwmWrite(pwm_pin_horizontal, int(dt_horizontal))
+	if vertical != 0:
+		global dt_vertical
+		dt_vertical += vertical
+		if dt_vertical > dt_max:
+			dt_vertical = dt_max
+		if dt_vertical < dt_min:
+			dt_vertical = dt_min
+
+		wiringpi.pwmWrite(pwm_pin_vertical, int(dt_vertical))
+	time.sleep(0.01)
 	return 1
  
 def checkPosition(posX, posY, maxX, maxY):
@@ -32,6 +92,9 @@ def checkPosition(posX, posY, maxX, maxY):
 	distanceX = abs(posX - centerX);
 	distanceY = abs(posY - centerY);	
 
+	maxDistanceX = maxX / 2
+	maxDistanceY = maxY / 2
+
 	# required distance from center to object (in percent of screen) to send move order
 	threshold = 8 # percent
 	maxSpeed = 600
@@ -39,27 +102,27 @@ def checkPosition(posX, posY, maxX, maxY):
 	speedRange = maxSpeed - minSpeed
 
 	# if distance does not hit threshold leave it to zero
-	moveX = 0
-	moveY = 0
+	moveX = 0.0
+	moveY = 0.0
 	
 	relativePosX = posX - centerX # negative if left
 	relativePosY = posY - centerY # negative if up
-
+	
+	maxMove = 10.0
 	if distanceX > maxX * (0.01 * threshold):
 		if relativePosX < 0:	# move left
-			moveX = -50
-			print("LEFT")
+			moveX = -1 * (distanceX / maxDistanceX) * maxMove
+			# print("LEFT")
 		else:
-			moveX = 50
-			print("RIGHT")
+			moveX =  (distanceX / maxDistanceX) * maxMove
+			# print("RIGHT")
 	if distanceY > maxY * (0.01 * threshold):
 		if relativePosY < 0:	# move up
-			print("UP")
-			moveY = 50
+			# print("UP")
+			moveY = -1 * (distanceY / maxDistanceY) * maxMove
 		else:				# move down
-			moveY = -50					
-			print("DOWN")
-	
+			moveY =  (distanceY / maxDistanceY) * maxMove					
+			# print("DOWN")
 	if moveX != 0 or moveY != 0:
 		transmitMoveOrder(moveX, moveY);
 
@@ -94,7 +157,7 @@ while True:
 
  	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         #Look for faces in the image using the loaded cascade file
-	faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+	faces = face_cascade.detectMultiScale(gray, 1.8, 5)
 
 	print ("Found ", len(faces))
 	
