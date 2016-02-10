@@ -31,56 +31,56 @@ wiringpi.wiringPiSetupGpio()
 pwm_pin_horizontal = 18
 pwm_pin_vertical = 13
 
-pwm_clock_1 = 400
-pwm_clock_2 = 400
+pwm_clock = 200
+
 
 pwm_range = 1024
 
-dt_min = 50
-dt_max = 95
+dt_min = 125
+dt_max = 175
 
-dt_horizontal = dt_min
-dt_vertical = dt_min
+dt_horizontal = 150
+dt_vertical = 150
 
 # enable PWM0                                                                 
 wiringpi.pinMode(pwm_pin_horizontal, 2)
 wiringpi.pwmSetMode(0)
-wiringpi.pwmSetClock(pwm_clock_1)
+wiringpi.pwmSetClock(pwm_clock)
 wiringpi.pwmSetRange(pwm_range)
 
 # enable PWM1                                                                 
 wiringpi.pinMode(pwm_pin_vertical, 2)
 wiringpi.pwmSetMode(0)
-wiringpi.pwmSetClock(pwm_clock_2)
+wiringpi.pwmSetClock(pwm_clock)
 wiringpi.pwmSetRange(pwm_range)
 
 time_start = time.time()
 cycle = 5		
 
-wiringpi.pwmWrite(pwm_pin_horizontal, 72)
-wiringpi.pwmWrite(pwm_pin_vertical, 72)
+wiringpi.pwmWrite(pwm_pin_horizontal, dt_horizontal)
+wiringpi.pwmWrite(pwm_pin_vertical, dt_vertical)
 
 time.sleep(1)
 
 def transmitMoveOrder(horizontal, vertical):
-	if horizontal != 0:
-		global dt_horizontal
-		dt_horizontal += horizontal
-		if dt_horizontal > dt_max:
-			dt_horizontal = dt_max
-		if dt_horizontal < dt_min:
-			dt_horizontal = dt_min
+	global dt_horizontal
+	dt_horizontal = 150 + horizontal
+	if dt_horizontal > dt_max:
+		dt_horizontal = dt_max
+	if dt_horizontal < dt_min:
+		dt_horizontal = dt_min
+	wiringpi.pwmWrite(pwm_pin_horizontal, int(dt_horizontal))
 
-		wiringpi.pwmWrite(pwm_pin_horizontal, int(dt_horizontal))
-	if vertical != 0:
-		global dt_vertical
-		dt_vertical += vertical
-		if dt_vertical > dt_max:
-			dt_vertical = dt_max
-		if dt_vertical < dt_min:
-			dt_vertical = dt_min
+	global dt_vertical
+	dt_vertical = 150 + vertical
+	if dt_vertical > dt_max:
+		dt_vertical = dt_max
+	if dt_vertical < dt_min:
+		dt_vertical = dt_min
+	wiringpi.pwmWrite(pwm_pin_vertical, int(dt_vertical))
 
-		wiringpi.pwmWrite(pwm_pin_vertical, int(dt_vertical))
+	print("Horizontal: ",dt_horizontal)
+	print("Vertical: ",dt_vertical)
 	time.sleep(0.01)
 	return 1
  
@@ -108,23 +108,22 @@ def checkPosition(posX, posY, maxX, maxY):
 	relativePosX = posX - centerX # negative if left
 	relativePosY = posY - centerY # negative if up
 	
-	maxMove = 10.0
+	maxMove = 4.0
 	if distanceX > maxX * (0.01 * threshold):
 		if relativePosX < 0:	# move left
-			moveX = -1 * (distanceX / maxDistanceX) * maxMove
+			moveX = -1 * maxMove # (distanceX / maxDistanceX) * maxMove
 			# print("LEFT")
 		else:
-			moveX =  (distanceX / maxDistanceX) * maxMove
+			moveX =  maxMove #(distanceX / maxDistanceX) * maxMove
 			# print("RIGHT")
 	if distanceY > maxY * (0.01 * threshold):
 		if relativePosY < 0:	# move up
 			# print("UP")
-			moveY = -1 * (distanceY / maxDistanceY) * maxMove
+			moveY = -1 * maxMove #(distanceY / maxDistanceY) * maxMove
 		else:				# move down
-			moveY =  (distanceY / maxDistanceY) * maxMove					
+			moveY =  maxMove #(distanceY / maxDistanceY) * maxMove					
 			# print("DOWN")
-	if moveX != 0 or moveY != 0:
-		transmitMoveOrder(moveX, moveY);
+	transmitMoveOrder(moveX, moveY);
 
 	return 1
 
@@ -171,6 +170,8 @@ while True:
 		else: 
 			cv2.rectangle(frame,(x, y), (x + w, y + h), (0, 0, 255), 2)				
 		
+	if len(faces) == 0:
+		transmitMoveOrder(0, 0)
 	# check to see if the frame should be displayed to our screen
 	if args["display"] > 0:
 		#elapsed_time = time.time() - start_time
